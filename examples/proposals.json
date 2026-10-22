@@ -1,0 +1,22 @@
+{
+  "sessionId": "docs-planning",
+  "title": "Documentation priorities",
+  "criterion": "Which proposal should receive attention first?",
+  "proposals": [
+    {
+      "id": "examples",
+      "label": "Runnable examples",
+      "detail": "Add copyable examples for common integration tasks."
+    },
+    {
+      "id": "reference",
+      "label": "API reference",
+      "detail": "Document every request field and response shape."
+    },
+    {
+      "id": "troubleshooting",
+      "label": "Troubleshooting guide",
+      "detail": "Explain frequent errors and how to recover."
+    }
+  ]
+}
