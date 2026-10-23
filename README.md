@@ -45,10 +45,14 @@ exact UUID and a local label in `config.json`. Labels are not identity checks.
 Edit `proposals.json` before starting: give the session an ID, a title, a common
 comparison criterion, and stable proposal IDs, labels, and short details.
 
-Pairing saves private credentials in `.pingroom/credentials.json`. An interrupted
-pairing reuses its saved link; an existing connection is never overwritten. After
-a link expires, confirm it is unusable before removing only
-`.pingroom/pairing.json` and reconnecting.
+Pairing saves private credentials in `.pingroom/credentials.json`. Setup records
+creation intent in `.pingroom/pairing.json` before registering a robot. Once a
+link is saved, an interrupted pairing reuses it within its original lifetime;
+an existing connection is never overwritten. A lost creation response leaves
+setup uncertain, so rerunning cannot register another robot. Keep that file and
+inspect Connected Agents. Resolve or revoke any created robot before archiving
+only `.pingroom/pairing.json` for an intentional new setup. Use the same manual
+recovery after a saved link expires; keep credentials and ranking evidence.
 
 For an existing connection or unattended run, set **both** `PINGROOM_TOKEN` and
 `PINGROOM_ROOM` in `.env` or the process environment. A complete pair overrides
@@ -101,8 +105,9 @@ mean every pair is ordered. Terminal evidence is reused locally; later commands
 do not recheck historical answers, current room access, or availability.
 
 The server-authenticated responder, exact request, room, asking registration,
-and Question lifetime are checked. Answer and resolution timestamps must agree
-and fall within the lifetime. Expired Questions resolve at their expiry timestamp.
+and Question lifetime are checked. Answered and cancelled Questions must resolve
+within their lifetime; an answer's timestamp must match its resolution. An
+expired Question may reach its terminal state at or after its expiry deadline.
 Observations allow 60 seconds of local clock skew. Malformed or conflicting
 evidence never becomes a preference.
 

@@ -161,8 +161,26 @@ test('all comparisons stay bound to the first asking registration and creation i
   await assert.rejects(other.run({ command: 'recover', attachId: id(1) }), /predates/);
 });
 
-test('expiry must resolve at its deadline; invalid resolution is rejected on reads and state replay', async (t) => {
-  for (const resolvedAt of ['2026-01-01T09:14:59.999Z', '2026-01-01T09:15:00.001Z', '2026-01-01T09:17:01.000Z']) {
+test('delayed expiry is persisted and replayed locally without another Question', async (t) => {
+  for (const resolvedAt of ['2026-01-01T09:15:30.000Z', '2026-01-01T09:17:00.000Z']) {
+    const s = await setup(t); await s.run(); s.clock.value = '2026-01-01T09:16:00.000Z';
+    s.api.terminal(id(1), 'expired'); s.api.questions.get(id(1)).resolved_at = resolvedAt;
+    const result = await s.run();
+    assert.equal(result.status, 'finished'); assert.equal(result.observedStatus, 'expired');
+    assert.equal(result.unansweredPairs[0].status, 'expired'); assert.equal(result.allPairsAnswered, false);
+    assert.equal(result.graph.observedEdges.length, 0); assert.equal(result.graph.explicitTies.length, 0);
+    const saved = await s.saved(); assert.equal(saved.attempts[0].observation.resolvedAt, resolvedAt);
+    const calls = s.api.calls.length; s.clock.value = '2026-01-02T09:00:00.000Z';
+    const historical = await localReport(s.directory, s.options.proposals, { save: true });
+    assert.equal(historical.unansweredPairs[0].status, 'expired');
+    assert.deepEqual(await readJson(join(s.directory, 'report.json')), historical);
+    assert.equal((await s.run()).status, 'finished'); assert.equal(s.api.calls.length, calls);
+    assert.equal(sends(s.api), 1); assert.deepEqual(await s.saved(), saved);
+  }
+});
+
+test('expiry before its deadline or beyond clock tolerance is rejected on reads and state replay', async (t) => {
+  for (const resolvedAt of ['2026-01-01T09:14:59.999Z', '2026-01-01T09:17:00.001Z']) {
     const s = await setup(t); await s.run(); s.clock.value = '2026-01-01T09:16:00.000Z';
     s.api.terminal(id(1), 'expired'); const q = s.api.questions.get(id(1)); q.resolved_at = resolvedAt;
     await assert.rejects(s.run(), /resolution time/);

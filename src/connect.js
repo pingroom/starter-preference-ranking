@@ -7,18 +7,25 @@ import { credentialDirectory, validateConnection } from './config.js';
 export async function connect(signal) {
   const release = await acquireLock(credentialDirectory);
   try {
-    if (await readJson(join(credentialDirectory, 'credentials.json'), 32768)) throw new Error('Saved connection already exists. Keep it to resume ranking; archive deliberately before reconnecting.');
+    signal?.throwIfAborted();
+    if (await readJson(join(credentialDirectory, 'credentials.json'), 32768) !== null) throw new Error('Saved connection already exists. Keep it to resume ranking; archive deliberately before reconnecting.');
     const client = makeClient({ signal, pairing: true });
     let pending = await readJson(join(credentialDirectory, 'pairing.json'), 65536);
+    if (pending?.phase === 'creating') throw new Error('Pairing creation is uncertain. Keep .pingroom/pairing.json and inspect Connected Agents. Resolve or revoke any created robot before archiving this file for an intentional new setup.');
     if (pending === null) {
+      const createdAt = Date.now();
+      // A lost registration or pairing response does not prove creation failed.
+      // Persist intent before either POST, and never replay that intent.
+      await atomicJson(credentialDirectory, 'pairing.json', { phase: 'creating', createdAt }, 65536);
+      signal?.throwIfAborted();
       const pairing = await client.auth.startPairing({ agent_label: 'Preference ranking' });
-      pending = { pairing, token: client.getToken(), createdAt: Date.now() };
+      pending = { pairing, token: client.getToken(), createdAt };
       await atomicJson(credentialDirectory, 'pairing.json', pending, 65536);
     }
     if (typeof pending.token !== 'string' || !pending.token || !Number.isSafeInteger(pending.createdAt)
       || !Number.isInteger(pending.pairing?.expires_in) || pending.pairing.expires_in < 1 || pending.pairing.expires_in > 3600) throw new Error('Saved pairing is malformed; inspect it before reconnecting.');
-    const remaining = Math.floor((pending.createdAt + pending.pairing.expires_in * 1000 - Date.now()) / 1000);
-    if (remaining <= 0) throw new Error('Saved pairing expired. Remove only .pingroom/pairing.json after confirming the link is unusable, then reconnect.');
+    const remaining = Math.min(pending.pairing.expires_in, Math.floor((pending.createdAt + pending.pairing.expires_in * 1000 - Date.now()) / 1000));
+    if (remaining <= 0) throw new Error('Saved pairing expired. Resolve or revoke the old robot in Connected Agents and confirm it is no longer usable before archiving only .pingroom/pairing.json for an intentional new setup.');
     const url = new URL(pending.pairing.pair_browser_url);
     if (url.origin !== 'https://pingroom.io' || url.username || url.password) throw new Error('Unexpected pairing URL.');
     client.setToken(pending.token);
